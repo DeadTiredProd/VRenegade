@@ -9,7 +9,7 @@
 **
 **	This program is distributed in the hope that it will be useful,
 **	but WITHOUT ANY WARRANTY; without even the implied warranty of
-**	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+**	MERCHANTABILLITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 **	GNU General Public License for more details.
 **
 **	You should have received a copy of the GNU General Public License
@@ -20,7 +20,7 @@
  ***              C O N F I D E N T I A L  ---  W E S T W O O D  S T U D I O S               ***
  ***********************************************************************************************
  *                                                                                             *
- *                 Project Name : Combat																		  *
+ *                 Project Name : Combat                                                       *
  *                                                                                             *
  *                     $Archive:: /Commando/Code/wwui/menudialog.cpp          $*
  *                                                                                             *
@@ -32,7 +32,7 @@
  *                                                                                             *
  *---------------------------------------------------------------------------------------------*
  * Functions:                                                                                  *
- * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+ * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "menudialog.h"
 #include "menubackdrop.h"
@@ -42,14 +42,16 @@
 #include "childdialog.h"
 #include "dialogcontrol.h"
 #include "ww3d.h"
+#include "camera.h"
+#include "vrmanager.h"
 
 
-////////////////////////////////////////////////////////////////
-//	Static member initialization
-////////////////////////////////////////////////////////////////
-MenuDialogClass *								MenuDialogClass::ActiveMenu	= nullptr;
-MenuBackDropClass *							MenuDialogClass::BackDrop		= nullptr;
-DynamicVectorClass<MenuDialogClass *>	MenuDialogClass::MenuStack;
+ ////////////////////////////////////////////////////////////////
+ //	Static member initialization
+ ////////////////////////////////////////////////////////////////
+MenuDialogClass* MenuDialogClass::ActiveMenu = nullptr;
+MenuBackDropClass* MenuDialogClass::BackDrop = nullptr;
+DynamicVectorClass<MenuDialogClass*> MenuDialogClass::MenuStack;
 
 
 ////////////////////////////////////////////////////////////////
@@ -57,14 +59,11 @@ DynamicVectorClass<MenuDialogClass *>	MenuDialogClass::MenuStack;
 //	MenuDialogClass
 //
 ////////////////////////////////////////////////////////////////
-MenuDialogClass::MenuDialogClass (const DialogResource *dialog_resource)	:
-	DialogBaseClass (dialog_resource)
+MenuDialogClass::MenuDialogClass(const DialogResource* dialog_resource) :
+	DialogBaseClass(dialog_resource)
 {
-	//
-	//	Add ourselves to the global stack of menus
-	//
-	MenuStack.Add (this);
-	return ;
+	MenuStack.Add(this);
+	return;
 }
 
 
@@ -73,21 +72,18 @@ MenuDialogClass::MenuDialogClass (const DialogResource *dialog_resource)	:
 //	~MenuDialogClass
 //
 ////////////////////////////////////////////////////////////////
-MenuDialogClass::~MenuDialogClass (void)
+MenuDialogClass::~MenuDialogClass(void)
 {
 	if (ActiveMenu == this) {
 		ActiveMenu = nullptr;
 	}
 
-	//
-	//	Remove ourselves from the stack
-	//
-	int index = MenuStack.ID (this);
+	int index = MenuStack.ID(this);
 	if (index != -1) {
-		MenuStack.Delete (index);
+		MenuStack.Delete(index);
 	}
 
-	return ;
+	return;
 }
 
 
@@ -97,10 +93,10 @@ MenuDialogClass::~MenuDialogClass (void)
 //
 ////////////////////////////////////////////////////////////////
 void
-MenuDialogClass::Initialize (void)
+MenuDialogClass::Initialize(void)
 {
 	Ensure_BackDrop();
-	return ;
+	return;
 }
 
 
@@ -110,15 +106,16 @@ MenuDialogClass::Initialize (void)
 //
 ////////////////////////////////////////////////////////////////
 void
-MenuDialogClass::Shutdown (void)
+MenuDialogClass::Shutdown(void)
 {
 	if (BackDrop != nullptr) {
 		delete BackDrop;
 		BackDrop = nullptr;
 	}
 
-	return ;
+	return;
 }
+
 
 ////////////////////////////////////////////////////////////////
 //
@@ -126,7 +123,7 @@ MenuDialogClass::Shutdown (void)
 //
 ////////////////////////////////////////////////////////////////
 void
-MenuDialogClass::Ensure_BackDrop (void)
+MenuDialogClass::Ensure_BackDrop(void)
 {
 	if (BackDrop == nullptr && WW3D::Is_Initted()) {
 		BackDrop = new MenuBackDropClass;
@@ -140,29 +137,150 @@ MenuDialogClass::Ensure_BackDrop (void)
 //
 ////////////////////////////////////////////////////////////////
 void
-MenuDialogClass::Render (void)
+MenuDialogClass::Render(void)
 {
-	//
-	//	Don't render if we aren't the active menu
-	//
-	if (ActiveMenu == this || DialogMgrClass::Peek_Transitioning_Dialog () == this) {
+	if (ActiveMenu == this || DialogMgrClass::Peek_Transitioning_Dialog() == this) {
 
-		//
-		//	Render the background scene first
-		//
 		Ensure_BackDrop();
-		if (BackDrop != nullptr) {
-			BackDrop->Render ();
-		}
 
-		//
-		//	Now, let the dialog subsystem render the controls and
-		// such...
-		//
-		DialogBaseClass::Render ();
+		if (BackDrop != nullptr) {
+
+			CameraClass* menu_camera = BackDrop->Peek_Camera();
+
+			if (VRManager::IsInitialized() &&
+				VRManager::IsStereoRendering() &&
+				menu_camera != nullptr) {
+
+				Matrix3D original_camera_transform =
+					menu_camera->Get_Transform();
+
+				Vector2 original_view_min;
+				Vector2 original_view_max;
+
+				menu_camera->Get_View_Plane(
+					original_view_min,
+					original_view_max
+				);
+
+				Vector2 original_viewport_min;
+				Vector2 original_viewport_max;
+
+				menu_camera->Get_Viewport(
+					original_viewport_min,
+					original_viewport_max
+				);
+
+				Matrix3D menu_rotation_correction(1);
+
+				menu_rotation_correction[1][1] = 0.0f;
+				menu_rotation_correction[1][2] = 1.0f;
+				menu_rotation_correction[2][1] = -1.0f;
+				menu_rotation_correction[2][2] = 0.0f;
+
+				Matrix3D corrected_menu_transform;
+
+				Matrix3D::Multiply(
+					original_camera_transform,
+					menu_rotation_correction,
+					&corrected_menu_transform
+				);
+
+				bool stereo_success = true;
+
+				for (int eye_index = 0;
+					eye_index < 2;
+					++eye_index) {
+
+					vr::EVREye eye =
+						(eye_index == 0)
+						? vr::Eye_Left
+						: vr::Eye_Right;
+
+					if (!VRManager::BeginEye(
+						eye,
+						*menu_camera,
+						corrected_menu_transform
+					)) {
+						stereo_success = false;
+						break;
+					}
+
+					BackDrop->Render();
+
+					DialogBaseClass::Render();
+
+					VRManager::EndEye(eye);
+
+					menu_camera->Set_Transform(
+						original_camera_transform
+					);
+
+					menu_camera->Set_View_Plane(
+						original_view_min,
+						original_view_max
+					);
+
+					menu_camera->Set_Viewport(
+						original_viewport_min,
+						original_viewport_max
+					);
+
+					menu_camera->Apply();
+				}
+
+				if (!stereo_success) {
+
+					menu_camera->Set_Transform(
+						original_camera_transform
+					);
+
+					menu_camera->Set_View_Plane(
+						original_view_min,
+						original_view_max
+					);
+
+					menu_camera->Set_Viewport(
+						original_viewport_min,
+						original_viewport_max
+					);
+
+					menu_camera->Apply();
+
+					BackDrop->Render();
+
+					DialogBaseClass::Render();
+				}
+
+				menu_camera->Set_Transform(
+					original_camera_transform
+				);
+
+				menu_camera->Set_View_Plane(
+					original_view_min,
+					original_view_max
+				);
+
+				menu_camera->Set_Viewport(
+					original_viewport_min,
+					original_viewport_max
+				);
+
+				menu_camera->Apply();
+
+			}
+			else {
+
+				BackDrop->Render();
+
+				DialogBaseClass::Render();
+			}
+		}
+		else {
+			DialogBaseClass::Render();
+		}
 	}
 
-	return ;
+	return;
 }
 
 
@@ -172,10 +290,10 @@ MenuDialogClass::Render (void)
 //
 ////////////////////////////////////////////////////////////////
 /*void
-MenuDialogClass::On_Init_Dialog (void)
+MenuDialogClass::On_Init_Dialog(void)
 {
-	DialogBaseClass::Set_Default_Focus ();
-	return ;
+	DialogBaseClass::Set_Default_Focus();
+	return;
 }*/
 
 
@@ -185,15 +303,12 @@ MenuDialogClass::On_Init_Dialog (void)
 //
 ////////////////////////////////////////////////////////////////
 void
-MenuDialogClass::Start_Dialog (void)
+MenuDialogClass::Start_Dialog(void)
 {
-	//
-	//	As a menu dialog we use the whole screen
-	//
-	Rect = Render2DClass::Get_Screen_Resolution ();
+	Rect = Render2DClass::Get_Screen_Resolution();
 
-	DialogBaseClass::Start_Dialog ();
-	return ;
+	DialogBaseClass::Start_Dialog();
+	return;
 }
 
 
@@ -203,26 +318,20 @@ MenuDialogClass::Start_Dialog (void)
 //
 ////////////////////////////////////////////////////////////////
 void
-MenuDialogClass::On_Activate (bool onoff)
+MenuDialogClass::On_Activate(bool onoff)
 {
 	if (onoff) {
 
-		//
-		//	Notify the old menu
-		//
 		if (ActiveMenu != nullptr) {
-			ActiveMenu->On_Menu_Activate (false);
+			ActiveMenu->On_Menu_Activate(false);
 		}
 
-		//
-		//	Switch to active state
-		//
 		ActiveMenu = this;
-		On_Menu_Activate (true);
+		On_Menu_Activate(true);
 	}
 
-	DialogBaseClass::On_Activate (onoff);
-	return ;
+	DialogBaseClass::On_Activate(onoff);
+	return;
 }
 
 
@@ -232,9 +341,9 @@ MenuDialogClass::On_Activate (bool onoff)
 //
 ////////////////////////////////////////////////////////////////
 void
-MenuDialogClass::On_Menu_Activate (bool /* onoff */)
+MenuDialogClass::On_Menu_Activate(bool /* onoff */)
 {
-	return ;
+	return;
 }
 
 
@@ -244,26 +353,23 @@ MenuDialogClass::On_Menu_Activate (bool /* onoff */)
 //
 ////////////////////////////////////////////////////////////////
 void
-MenuDialogClass::End_Dialog (void)
+MenuDialogClass::End_Dialog(void)
 {
-	//
-	//	Is this the last menu?  If so, send a notification
-	//
-	if (DialogMgrClass::Is_Flushing_Dialogs () == false) {
+	if (DialogMgrClass::Is_Flushing_Dialogs() == false) {
 
-		if (MenuStack.Count () == 1) {
-			On_Last_Menu_Ending ();
-		} else {
+		if (MenuStack.Count() == 1) {
+			On_Last_Menu_Ending();
+		}
+		else {
 
-			//
-			//	Play the sound effect
-			//
-			StyleMgrClass::Play_Sound (StyleMgrClass::EVENT_MENU_BACK);
+			StyleMgrClass::Play_Sound(
+				StyleMgrClass::EVENT_MENU_BACK
+			);
 		}
 	}
 
-	DialogBaseClass::End_Dialog ();
-	return ;
+	DialogBaseClass::End_Dialog();
+	return;
 }
 
 
@@ -272,10 +378,10 @@ MenuDialogClass::End_Dialog (void)
 //	Replace_BackDrop
 //
 ////////////////////////////////////////////////////////////////
-MenuBackDropClass *
-MenuDialogClass::Replace_BackDrop (MenuBackDropClass *backdrop)
+MenuBackDropClass*
+MenuDialogClass::Replace_BackDrop(MenuBackDropClass* backdrop)
 {
-	MenuBackDropClass *retval = BackDrop;
+	MenuBackDropClass* retval = BackDrop;
 	BackDrop = backdrop;
 	return retval;
 }
