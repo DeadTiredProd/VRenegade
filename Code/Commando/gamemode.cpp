@@ -58,6 +58,7 @@
 #include "ccamera.h"
 #include "diagnostics.h"
 #include "dx8wrapper.h"
+#include "vrmanager.h"
 #include "sortingrenderer.h"
 #include "textureloader.h"
 #include "BINKMovie.h"
@@ -244,6 +245,9 @@ void	GameModeManager::Render( void )
 			WWPROFILE( "Begin_Render" );
 
 			WW3D::Begin_Render (clear, clear, BackgroundMgrClass::Get_Clear_Color());
+			#ifdef W3D_CLIENT
+						VRManager::BeginFrame();
+			#endif
 		}
 
 		if (GameInFocus) {
@@ -293,12 +297,16 @@ void	GameModeManager::Render( void )
 			WWPROFILE( "BINK" );
 			BINKMovie::Render();
 		}
-
+#ifdef W3D_CLIENT
+		if (VRManager::IsInitialized())
 		{
-			WWPROFILE( "End_Render" );
+			VRManager::SubmitFrame();
+		}
+#endif
+		{
+			WWPROFILE("End_Render");
 			WW3D::End_Render();
 		}
-
 
 		if (do_pscene) {
 			COMBAT_SCENE->Post_Render_Processing();

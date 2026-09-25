@@ -23,6 +23,7 @@ set(COMMANDO_SRC
     nethandler.h
     player.cpp
     player.h
+    vrmanager.cpp
     playermanager.cpp
     playermanager.h
     regbool.cpp
@@ -427,6 +428,10 @@ set(COMMANDO_SRC
 # Common stuff for both client and server builds.
 add_library(commando INTERFACE)
 
+target_include_directories(commando INTERFACE
+"${CMAKE_SOURCE_DIR}/lib/openvr/headers"
+)
+
 target_link_libraries(commando INTERFACE
     winmm
     wsock32
@@ -471,19 +476,24 @@ if(WIN32)
     )
 endif()
 
-# Targets to build.
+# MODIFIED 
 if(W3D_CLIENT) # Full game client
-    add_executable(renegade WIN32 ${COMMANDO_SRC})
+add_executable(renegade WIN32 ${COMMANDO_SRC})
+target_compile_definitions(renegade PRIVATE W3D_CLIENT)
+target_include_directories(renegade PRIVATE
+    "${CMAKE_SOURCE_DIR}/lib/openvr/headers"
+)
 
-    target_link_libraries(renegade PRIVATE
-        commando
-    )
-
-    embed_resources(renegade
-        SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/renegade_resources.cpp"
-        RESOURCES
-            "${CMAKE_CURRENT_SOURCE_DIR}/Renegade.ico"
-    )
+target_link_libraries(renegade PRIVATE
+    commando
+    "${CMAKE_SOURCE_DIR}/lib/openvr/lib/win64/openvr_api.lib"
+)
+target_link_libraries(renegade PRIVATE d3d11 dxgi)
+embed_resources(renegade
+    SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/renegade_resources.cpp"
+    RESOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/Renegade.ico"
+)
 endif()
 
 if(W3D_FDS) # Dedicated headless server

@@ -36,6 +36,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "init.h"
+#include "vrmanager.h"
 #include "debug.h"
 #include "wwmath.h"
 #include "ww3d.h"
@@ -859,7 +860,7 @@ bool Game_Init(void)
 			"Renegade Graphics Initialization Error.");
 		return false;
 	}
-
+	
 	if (ConsoleBox.Is_Exclusive()) {
 		WW3D::Enable_Decals(false);
 		PhysicsSceneClass * scene = PhysicsSceneClass::Get_Instance();
@@ -869,7 +870,10 @@ bool Game_Init(void)
 		if ( WW3D::Registry_Load_Render_Device( APPLICATION_SUB_KEY_NAME_RENDER, true ) != WW3D_ERROR_OK ) {
 			WWDEBUG_SAY(("WW3D::Registry_Load_Render_Device Failed!\r\n"));
 			return false;
-		}
+		}	
+		#ifdef W3D_CLIENT
+		VRManager::Initialize();
+		#endif
 
 		if ( WW3D::Registry_Save_Render_Device( APPLICATION_SUB_KEY_NAME_RENDER ) != WW3D_ERROR_OK ) {
 			WWDEBUG_SAY(("WW3D::Registry_Save_Render_Device Failed!\r\n"));

@@ -79,6 +79,7 @@
 #include "ini.h"
 #include "openw3d.h"
 #include "soutil.h"
+#include "vrmanager.h"
 
 const int DEFAULT_RESOLUTION_WIDTH = 800;
 const int DEFAULT_RESOLUTION_HEIGHT = 600;
@@ -510,7 +511,14 @@ bool DX8Wrapper::Create_Device(void)
 	/*
 	** Initialize all subsystems
 	*/
+	/*
+	** Initialize all subsystems
+	*/
 	Do_Onetime_Device_Dependent_Inits();
+
+#ifdef W3D_CLIENT
+	VRManager::Initialize();
+#endif
 	return true;
 }
 

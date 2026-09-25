@@ -221,6 +221,11 @@ set(WW3D2_SRC
 
 # Targets to build.
 add_library(ww3d2 STATIC)
+target_include_directories(ww3d2 PRIVATE
+    "${CMAKE_SOURCE_DIR}/lib/openvr/headers"
+)
+
+ include_directories("${CMAKE_SOURCE_DIR}/lib/openvr/headers")
 
 target_link_libraries(ww3d2 PRIVATE
     wwcommon
@@ -239,7 +244,9 @@ target_sources(ww3d2 PRIVATE ${WW3D2_SRC})
 if (W3D_TOOLS)
     # Targets to build.
     add_library(ww3d2e STATIC)
-
+        target_include_directories(ww3d2e PRIVATE
+        "${CMAKE_SOURCE_DIR}/lib/openvr/headers"
+    )
     target_link_libraries(ww3d2e PRIVATE
         wwcommon
         wwlib

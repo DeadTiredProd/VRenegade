@@ -97,6 +97,7 @@
 #include "stylemgr.h"
 #include "translatedb.h"
 #include "string_ids.h"
+#include "vrmanager.h"
 
 
 const int DEFAULT_MAX_SHADOWS = 4;
@@ -753,47 +754,195 @@ void 	CombatManager::Think()
 /*
 **
 */
+/*
+**
+*/
+/*
+**
+*/
+/*
+**
+*/
+/*
+**
+*/
+/*
+**
+*/
+/*
+**
+*/
 void CombatManager::Render()
 {
-	if ( COMBAT_STAR != nullptr ) {
-		MultiplayRenderingAllowed = true;
+	if (!MultiplayRenderingAllowed) {
+		return;
 	}
 
-	if ( MultiplayRenderingAllowed ) {
-		SystemInfoLog::Record_Frame();
+	SystemInfoLog::Record_Frame();
 
-		{
-			WWPROFILE( "Camera Shakes" );
-			COMBAT_SCENE->Apply_Camera_Shakes (*MainCamera);
-		}
+	{
+		WWPROFILE("Camera Shakes");
+		COMBAT_SCENE->Apply_Camera_Shakes(*MainCamera);
+	}
 
-		DazzleRenderObjClass::Install_Dazzle_Visibility_Handler(&_TheCombatDazzleHandler);
+	DazzleRenderObjClass::Install_Dazzle_Visibility_Handler(
+		&_TheCombatDazzleHandler
+	);
 
-		{
-			WWPROFILE( "Combat Render BG" );
+	if (VRManager::IsInitialized() &&
+		MainCamera != nullptr &&
+		MainCamera->Get_Projection_Type() ==
+		CameraClass::PERSPECTIVE) {
 
-			WW3D::Render (BackgroundScene, MainCamera);
-		}
+		Matrix3D original_camera_transform =
+			MainCamera->Get_Transform();
 
-		{
-			WWPROFILE( "Combat Render FG" );
-			WW3D::Render(COMBAT_SCENE, MainCamera);
-		}
+		Vector2 original_view_min;
+		Vector2 original_view_max;
 
-		{
-			WWPROFILE( "DazzleRenderer" );
-			DazzleLayerClass * dlayer = COMBAT_DAZZLE_LAYER;
-			if (dlayer != nullptr) {
-				dlayer->Render(COMBAT_CAMERA);
+		MainCamera->Get_View_Plane(
+			original_view_min,
+			original_view_max
+		);
+
+		Vector2 original_viewport_min;
+		Vector2 original_viewport_max;
+
+		MainCamera->Get_Viewport(
+			original_viewport_min,
+			original_viewport_max
+		);
+
+		bool stereo_success = true;
+
+		for (int eye_index = 0;
+			eye_index < 2;
+			++eye_index) {
+
+			vr::EVREye eye =
+				(eye_index == 0)
+				? vr::Eye_Left
+				: vr::Eye_Right;
+
+			if (!VRManager::BeginEye(
+				eye,
+				*MainCamera,
+				original_camera_transform
+			)) {
+				stereo_success = false;
+				break;
 			}
+
+			WW3D::Render(
+				BackgroundScene,
+				MainCamera,
+				true,
+				true,
+				BackgroundMgrClass::Get_Clear_Color()
+			);
+
+			WW3D::Render(
+				COMBAT_SCENE,
+				MainCamera
+			);
+
+			{
+				DazzleLayerClass* dlayer =
+					COMBAT_DAZZLE_LAYER;
+
+				if (dlayer != nullptr) {
+					dlayer->Render(
+						COMBAT_CAMERA
+					);
+				}
+			}
+
+			HUDClass::Render();
+
+			ScreenFadeManager::Render();
+
+			VRManager::EndEye(eye);
+
+			MainCamera->Set_Transform(
+				original_camera_transform
+			);
+
+			MainCamera->Set_View_Plane(
+				original_view_min,
+				original_view_max
+			);
+
+			MainCamera->Set_Viewport(
+				original_viewport_min,
+				original_viewport_max
+			);
+
+			MainCamera->Apply();
 		}
 
-		DazzleRenderObjClass::Install_Dazzle_Visibility_Handler(nullptr);
+		MainCamera->Set_Transform(
+			original_camera_transform
+		);
 
-		HUDClass::Render();
+		MainCamera->Set_View_Plane(
+			original_view_min,
+			original_view_max
+		);
 
-		ScreenFadeManager::Render();
+		MainCamera->Set_Viewport(
+			original_viewport_min,
+			original_viewport_max
+		);
+
+		MainCamera->Apply();
+
+		DazzleRenderObjClass::Install_Dazzle_Visibility_Handler(
+			nullptr
+		);
+
+		if (stereo_success) {
+			return;
+		}
 	}
+
+	{
+		WWPROFILE("Combat Render BG");
+
+		WW3D::Render(
+			BackgroundScene,
+			MainCamera
+		);
+	}
+
+	{
+		WWPROFILE("Combat Render FG");
+
+		WW3D::Render(
+			COMBAT_SCENE,
+			MainCamera
+		);
+	}
+
+	{
+		WWPROFILE("DazzleRenderer");
+
+		DazzleLayerClass* dlayer =
+			COMBAT_DAZZLE_LAYER;
+
+		if (dlayer != nullptr) {
+			dlayer->Render(
+				COMBAT_CAMERA
+			);
+		}
+	}
+
+	DazzleRenderObjClass::Install_Dazzle_Visibility_Handler(
+		nullptr
+	);
+
+	HUDClass::Render();
+
+	ScreenFadeManager::Render();
 }
 
 /*
