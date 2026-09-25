@@ -1795,6 +1795,7 @@ void VRManager::SubmitFlatFrame()
     texture.handle =
         D3D11Texture;
 
+
     texture.eType =
         vr::TextureType_DirectX;
 
