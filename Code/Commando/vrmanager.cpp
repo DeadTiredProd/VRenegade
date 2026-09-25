@@ -43,6 +43,8 @@ float VRManager::EyeViewMaxY[2] = { 1.0f, 1.0f };
 
 float VRManager::PositionScale = 1.0f;
 
+static const float VRManagerHeadPitchOffsetDegrees = 2.5f;
+
 ID3D11Device* VRManager::D3D11Device = nullptr;
 ID3D11DeviceContext* VRManager::D3D11Context = nullptr;
 
@@ -449,6 +451,8 @@ bool VRManager::BeginEye(
     );
 
     Matrix3D head_camera;
+    Matrix3D pitch_correction;
+    Matrix3D corrected_head_camera;
     Matrix3D eye_camera;
 
     Matrix3D::Multiply(
@@ -457,8 +461,39 @@ bool VRManager::BeginEye(
         &head_camera
     );
 
+    const float pitch_radians =
+        VRManagerHeadPitchOffsetDegrees *
+        (3.14159265358979323846f / 180.0f);
+
+    const float pitch_sin =
+        sinf(pitch_radians);
+
+    const float pitch_cos =
+        cosf(pitch_radians);
+
+    pitch_correction =
+        Matrix3D(1);
+
+    pitch_correction[1][1] =
+        pitch_cos;
+
+    pitch_correction[1][2] =
+        -pitch_sin;
+
+    pitch_correction[2][1] =
+        pitch_sin;
+
+    pitch_correction[2][2] =
+        pitch_cos;
+
     Matrix3D::Multiply(
         head_camera,
+        pitch_correction,
+        &corrected_head_camera
+    );
+
+    Matrix3D::Multiply(
+        corrected_head_camera,
         HeadToEyeW3D[index],
         &eye_camera
     );
@@ -1794,7 +1829,6 @@ void VRManager::SubmitFlatFrame()
 
     texture.handle =
         D3D11Texture;
-
 
     texture.eType =
         vr::TextureType_DirectX;
